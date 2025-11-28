@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4f46e5">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Planilha de Treino — Estática</title>
+
+<style>
+  /* ========== Tipografia & Variáveis ========== */
+  :root{
+    --bg: #f3f4f6;
+    --card: #ffffff;
+    --muted: #6b7280;
+    --text: #0f172a;
+    --accent: #4f46e5;
+    --accent-2: #06b6d4;
+    --success: #16a34a;
+    --danger: #dc2626;
+    --glass: rgba(255,255,255,0.6);
+    --radius: 14px;
+    --shadow: 0 6px 18px rgba(15,23,42,0.06);
+    --code-font: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Helvetica Neue", monospace;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+  }
+  [data-theme="dark"]{
+    --bg: #081025;
+    --card: #071226;
+    --muted: #9ca3af;
+    --text: #e6eef8;
+    --accent: #7c5cff;
+    --accent-2: #0ed6f2;
+    --success: #22c55e;
+    --danger: #fb7185;
+    --glass: rgba(10,16,28,0.5);
+    --shadow: 0 10px 30px rgba(2,6,23,0.7);
+  }
+
+  html,body{height:100%}
+  body{
+    margin:0;
+    background: linear-gradient(180deg,var(--bg), #ecf2ff10);
+    color:var(--text);
+    padding:24px;
+    box-sizing:border-box;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ========== Layout ========== */
+  .container{ max-width:1200px; margin:0 auto; display:grid; grid-template-columns: 1fr 360px; gap:20px; align-items:start;}
+  header{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px;}
+  h1{ font-weight:700; font-size:20px; margin:0;}
+  .controls{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+  /* ========== Cards / Tables ========== */
+  .card{
+    background:var(--card);
+    border-radius: var(--radius);
+    padding:14px;
+    box-shadow: var(--shadow);
+    border: 1px solid rgba(0,0,0,0.04);
+  }
+  .card.small{ padding:10px }
+  .treino-block + .treino-block{ margin-top:12px; }
+
+  table{ width:100%; border-collapse:collapse; font-size:14px; }
+  thead th{ text-align:left; padding:8px 6px; color:var(--muted); font-weight:600; font-size:13px; border-bottom:1px solid rgba(0,0,0,0.06) }
+  td{ padding:8px 6px; vertical-align:middle; border-bottom:1px dashed rgba(0,0,0,0.03) }
+  input[type="text"], input[type="number"], select{ padding:6px 8px; border-radius:8px; border:1px solid #ddd; background:transparent; color:var(--text); min-width:60px; }
+  input[type="search"]{ padding:8px 10px; border-radius:10px; border:1px solid #e6e6e6; width:100%; }
+
+  /* Buttons */
+  .btn{ padding:8px 10px; border-radius:10px; border:0; cursor:pointer; font-weight:600; }
+  .btn.ghost{ background:transparent; border:1px solid rgba(0,0,0,0.06); }
+  .btn.primary{ background:var(--accent); color:white; }
+  .btn.warn{ background:var(--accent-2); color:white; }
+  .btn.sm{ padding:6px 8px; font-size:13px; border-radius:8px; }
+
+  /* Sidebar list */
+  .list-item{ display:flex; justify-content:space-between; align-items:center; padding:8px; border-radius:8px; }
+  .list-item:hover{ background: linear-gradient(90deg, rgba(0,0,0,0.03), transparent) }
+
+  /* Chart */
+  .chart-wrap{ height:220px; display:flex; align-items:center; justify-content:center; }
+
+  /* Footer / print */
+  footer{ margin-top:16px; color:var(--muted); font-size:13px; }
+
+  /* Responsive */
+  @media (max-width:1000px){
+    .container{ grid-template-columns: 1fr; }
+  }
+
+  /* Print CSS: hide controls, expand content */
+  @media print {
+    body{ padding:8mm; background: white; color: black; }
+    .controls, .btn, header .controls, .sidebar, footer{ display:none !important; }
+    .container{ grid-template-columns: 1fr !important; gap:0; }
+    .card{ box-shadow:none; border-radius:6px; border:1px solid #ddd; }
+    table{ font-size:12px }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Planilha de Treino — (estática)</h1>
+    <div style="color:var(--muted); font-size:13px; margin-top:6px">Salvar automático no navegador · Export/Import JSON para backup</div>
+  </div>
+
+  <div class="controls">
+    <input id="search" type="search" placeholder="Buscar exercício..." />
+    <button id="btnToggleTheme" class="btn ghost">Tema</button>
+    <button id="btnExport" class="btn ghost">Exportar</button>
+    <label class="btn ghost" style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+      Importar <input id="fileImport" type="file" accept="application/json" style="display:none" />
+    </label>
+    <button id="btnReset" class="btn" style="background:transparent; color:var(--danger); border:1px solid rgba(0,0,0,0.06);">Resetar</button>
+  </div>
+</header>
+
+<div class="container">
+  <!-- Main area (treinos) -->
+  <main>
+    <div style="display:flex; gap:12px; align-items:center; margin-bottom:10px;">
+      <div class="card small" style="display:flex; gap:8px; align-items:center;">
+        <div style="font-size:13px; color:var(--muted)">Treino do dia</div>
+        <strong id="todayLabel" style="padding:6px 10px; border-radius:8px; background:var(--glass)"></strong>
+        <button id="btnSwitch" class="btn sm ghost">Mudar</button>
+      </div>
+
+      <div class="card small" style="display:flex; gap:8px; align-items:center;">
+        <div style="font-size:13px; color:var(--muted)">Sessão</div>
+        <button id="btnSaveSession" class="btn primary sm">Salvar sessão</button>
+      </div>
+
+      <div class="card small" style="display:flex; gap:8px; align-items:center;">
+        <div style="font-size:13px; color:var(--muted)">Incremento</div>
+        <input id="inputIncrement" type="number" step="0.1" value="2.5" style="width:80px" />
+      </div>
+    </div>
+
+    <!-- Treino blocks -->
+    <div id="treinosContainer"></div>
+
+  </main>
+
+  <!-- Sidebar -->
+  <aside>
+    <div class="card">
+      <h3 style="margin:0 0 8px 0">Exercícios (filtrados)</h3>
+      <div id="filteredList" style="max-height:220px; overflow:auto"></div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <h3 style="margin:0 0 8px 0">Gráfico de progressão</h3>
+      <div id="chartInfo" style="font-size:13px; color:var(--muted); margin-bottom:8px">Selecione um exercício para ver o gráfico.</div>
+      <div class="chart-wrap card" style="padding:10px;">
+        <canvas id="chartCanvas" width="320" height="200" style="max-width:100%;"></canvas>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <h3 style="margin:0 0 8px 0">Atalhos</h3>
+      <div style="display:flex; gap:8px; flex-direction:column;">
+        <button id="btnQuickSave" class="btn primary">Salvar sessão (rápido)</button>
+        <button id="btnNext" class="btn ghost">Próximo treino (A→B→C)</button>
+        <button id="btnClearSelection" class="btn ghost">Limpar seleção</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<footer>
+  Impressão: use o botão de imprimir do navegador. <span style="margin-left:10px">Dados salvos no seu navegador (localStorage).</span>
+</footer>
+
+<script>
+/* ============================
+   Dados padrões e helpers
+   ============================ */
+const DEFAULT_TREINOS = {
+  "Treino A": [
+    { nome: "Supino Reto máquina", reps: "3x8-12" },
+    { nome: "Crucifixo no voador", reps: "3x8-12" },
+    { nome: "Supino 45º articulado", reps: "3x8-12" },
+    { nome: "Tríceps pronado", reps: "3x8-12" },
+    { nome: "Tríceps Francês", reps: "3x8-12" },
+    { nome: "Tríceps corda", reps: "3x8-12" },
+    { nome: "Flexão de ombro com anilha", reps: "3x8-12" },
+    { nome: "Desenvolvimento Ombro com halteres", reps: "3x8-12" }
+  ],
+  "Treino B": [
+    { nome: "Pulley Anterior neutro", reps: "3x8-12" },
+    { nome: "Remada Baixa neutra", reps: "3x8-12" },
+    { nome: "Remada baixa supinada", reps: "3x8-12" },
+    { nome: "Rosca direta barra W", reps: "3x8-12" },
+    { nome: "Rosca martelo alternada", reps: "3x8-12" },
+    { nome: "Rosca scott", reps: "3x8-12" },
+    { nome: "Abdução Ombro", reps: "3x8-12" }
+  ],
+  "Treino C": [
+    { nome: "Agachamento na corda", reps: "4x15" },
+    { nome: "Leg Press horizontal", reps: "3x8-12" },
+    { nome: "Banco Extensor unilateral + bilateral", reps: "3x8-12" },
+    { nome: "Banco Flexor", reps: "3x8-12" },
+    { nome: "Mesa Flexora", reps: "3x8-12" },
+    { nome: "Banco Adutor", reps: "3x8-12" },
+    { nome: "Banco Abdutor", reps: "3x8-12" },
+    { nome: "Panturrilha livre", reps: "3x8-12" }
+  ]
+};
+
+const STORAGE_KEY = 'planilha_treino_static_v1';
+
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  } catch(e){
+    console.error('loadState error', e);
+    return null;
+  }
+}
+function saveState(state){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+/* ============================
+   Estado inicial
+   ============================ */
+let state = loadState() || {
+  treinos: JSON.parse(JSON.stringify(DEFAULT_TREINOS)),
+  today: "Treino A",
+  history: {},   // { "Exercício": [{date: 'YYYY-MM-DD', carga: number|null, reps: ''}, ...] }
+  config: { increment: 2.5, theme: 'light' }
+};
+
+/* ============================
+   Element refs
+   ============================ */
+const treinosContainer = document.getElementById('treinosContainer');
+const todayLabel = document.getElementById('todayLabel');
+const btnSwitch = document.getElementById('btnSwitch');
+const btnSaveSession = document.getElementById('btnSaveSession');
+const inputIncrement = document.getElementById('inputIncrement');
+const searchInput = document.getElementById('search');
+const filteredList = document.getElementById('filteredList');
+const chartCanvas = document.getElementById('chartCanvas');
+const chartInfo = document.getElementById('chartInfo');
+const btnToggleTheme = document.getElementById('btnToggleTheme');
+const btnExport = document.getElementById('btnExport');
+const fileImport = document.getElementById('fileImport');
+const btnReset = document.getElementById('btnReset');
+const btnQuickSave = document.getElementById('btnQuickSave');
+const btnNext = document.getElementById('btnNext');
+const btnClearSelection = document.getElementById('btnClearSelection');
+
+/* ============================
+   Theme
+   ============================ */
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme', state.config.theme);
+  btnToggleTheme.textContent = state.config.theme === 'dark' ? 'Tema: Escuro' : 'Tema: Claro';
+}
+applyTheme();
+
+/* ============================
+   Rendering functions
+   ============================ */
+
+let selectedExercise = null;
+
+function render(){
+  // header
+  todayLabel.textContent = state.today;
+  inputIncrement.value = state.config.increment;
+
+  // treinos
+  treinosContainer.innerHTML = '';
+  Object.entries(state.treinos).forEach(([treinoName, exercises]) => {
+    const block = document.createElement('div');
+    block.className = 'card treino-block';
+    if(treinoName === state.today) block.style.border = '2px solid rgba(79,70,229,0.12)';
+    block.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+        <strong style="font-size:16px">${treinoName}</strong>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn sm ghost" data-use="${treinoName}">Usar hoje</button>
+        </div>
+      </div>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Exercício</th><th style="width:86px">Séries/Reps</th><th style="width:90px">Carga (kg)</th><th style="width:90px">Reps feitas</th><th style="width:70px">RPE</th><th style="width:170px">Ações</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    `;
+    // fill rows
+    const tbody = block.querySelector('tbody');
+    exercises.forEach((ex, idx) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="min-width:170px">${ex.nome}</td>
+        <td>${ex.reps || ''}</td>
+        <td><input data-field="carga" data-treino="${treinoName}" data-idx="${idx}" type="text" value="${ex.carga || ''}" /></td>
+        <td><input data-field="reps_feitas" data-treino="${treinoName}" data-idx="${idx}" type="text" value="${ex.reps_feitas || ''}" /></td>
+        <td><input data-field="rpe" data-treino="${treinoName}" data-idx="${idx}" type="text" value="${ex.rpe || ''}" /></td>
+        <td>
+          <button class="btn sm ghost" data-chart="${ex.nome}">Gráfico</button>
+          <button class="btn sm" data-progress="${treinoName}|${idx}">+ Progredir</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    treinosContainer.appendChild(block);
+  });
+
+  // filtered list
+  renderFiltered();
+
+  // save UI state
+  saveState(state);
+}
+
+function renderFiltered(){
+  const q = (searchInput.value || '').toLowerCase();
+  const items = [];
+  Object.entries(state.treinos).forEach(([tName, list]) => {
+    list.forEach((ex, idx) => {
+      if(!q || ex.nome.toLowerCase().includes(q)) items.push({ treino: tName, idx, nome: ex.nome, reps: ex.reps });
+    });
+  });
+
+  filteredList.innerHTML = '';
+  if(items.length === 0){
+    filteredList.innerHTML = '<div style="color:var(--muted)">Nenhum exercício encontrado</div>';
+    return;
+  }
+  items.forEach(it => {
+    const el = document.createElement('div');
+    el.className = 'list-item';
+    el.innerHTML = `<div>
+        <div style="font-weight:600">${it.nome}</div>
+        <div style="font-size:12px; color:var(--muted)">${it.treino} • ${it.reps}</div>
+      </div>
+      <div>
+        <button class="btn sm ghost" data-chart="${it.nome}">Ver gráfico</button>
+      </div>`;
+    filteredList.appendChild(el);
+  });
+}
+
+/* ============================
+   Events (delegation)
+   ============================ */
+
+document.addEventListener('click', (ev) => {
+  const el = ev.target;
+
+  // Use today
+  if(el.matches('button[data-use]')){
+    state.today = el.getAttribute('data-use');
+    render();
+  }
+
+  // Progress button
+  if(el.matches('button[data-progress]')){
+    const val = el.getAttribute('data-progress');
+    const [treinoName, idx] = val.split('|');
+    const idxN = Number(idx);
+    progressExercise(treinoName, idxN);
+    render();
+  }
+
+  // Chart button
+  if(el.matches('button[data-chart]')){
+    const name = el.getAttribute('data-chart');
+    selectExercise(name);
+  }
+});
+
+// Inputs change (delegated)
+document.addEventListener('input', (ev) => {
+  const el = ev.target;
+  if(el.matches('input[data-field]')){
+    const field = el.getAttribute('data-field');
+    const treinoName = el.getAttribute('data-treino');
+    const idx = Number(el.getAttribute('data-idx'));
+    const value = el.value;
+    // update in state
+    state.treinos[treinoName][idx][field] = value;
+    saveState(state);
+  }
+});
+
+// Search
+searchInput.addEventListener('input', () => {
+  renderFiltered();
+});
+
+// Switch today button
+btnSwitch.addEventListener('click', () => {
+  const order = ["Treino A","Treino B","Treino C"];
+  const i = order.indexOf(state.today);
+  state.today = order[(i+1)%order.length];
+  render();
+});
+
+// Save session
+btnSaveSession.addEventListener('click', () => {
+  saveSession(state.today);
+  alert('Sessão salva!');
+  drawChart(); // update chart if selected
+});
+
+// Quick save
+btnQuickSave.addEventListener('click', () => {
+  saveSession(state.today);
+  drawChart();
+});
+
+// Increment input
+inputIncrement.addEventListener('change', () => {
+  const v = parseFloat(inputIncrement.value) || 0;
+  state.config.increment = v;
+  saveState(state);
+});
+
+// Toggle theme
+btnToggleTheme.addEventListener('click', () => {
+  state.config.theme = state.config.theme === 'dark' ? 'light' : 'dark';
+  applyTheme();
+  saveState(state);
+});
+
+// Export
+btnExport.addEventListener('click', () => {
+  const data = JSON.stringify(state, null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'planilha_treino_export.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// Import
+fileImport.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if(!file) return;
+  const r = new FileReader();
+  r.onload = (ev) => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if(data.treinos) state.treinos = data.treinos;
+      if(data.today) state.today = data.today;
+      if(data.history) state.history = data.history;
+      if(data.config) state.config = Object.assign(state.config, data.config);
+      saveState(state);
+      render();
+      alert('Importado com sucesso');
+    } catch(err){
+      alert('Arquivo inválido');
+    }
+  };
+  r.readAsText(file);
+});
+
+// Reset
+btnReset.addEventListener('click', () => {
+  if(!confirm('Redefinir todos os dados para o padrão?')) return;
+  state = {
+    treinos: JSON.parse(JSON.stringify(DEFAULT_TREINOS)),
+    today: 'Treino A',
+    history: {},
+    config: { increment: 2.5, theme: 'light' }
+  };
+  applyTheme();
+  saveState(state);
+  render();
+});
+
+// Next
+btnNext.addEventListener('click', () => {
+  const order = ["Treino A","Treino B","Treino C"];
+  const i = order.indexOf(state.today);
+  state.today = order[(i+1)%order.length];
+  render();
+});
+
+// Clear selection
+btnClearSelection.addEventListener('click', () => {
+  selectedExercise = null;
+  chartInfo.textContent = 'Selecione um exercício para ver o gráfico.';
+  drawChart();
+});
+
+/* ============================
+   Core actions
+   ============================ */
+
+function saveSession(treinoName){
+  const date = new Date().toISOString().slice(0,10);
+  (state.treinos[treinoName] || []).forEach(ex => {
+    const key = ex.nome;
+    if(!state.history[key]) state.history[key] = [];
+    const carga = parseFloat(String(ex.carga || '').replace(',', '.'));
+    state.history[key].push({ date, carga: Number.isFinite(carga) ? carga : null, reps: ex.reps_feitas || '' });
+    // keep history reasonable length
+    if(state.history[key].length > 200) state.history[key].shift();
+  });
+  saveState(state);
+}
+
+function progressExercise(treinoName, idx){
+  const ex = state.treinos[treinoName][idx];
+  const current = parseFloat(String(ex.carga || '').replace(',', '.'));
+  const inc = Number(state.config.increment) || 0;
+  const next = Number.isFinite(current) ? current + inc : inc;
+  // round to one decimal if needed
+  ex.carga = Math.round(next * 10) / 10;
+  saveState(state);
+}
+
+/* ============================
+   Chart: simple canvas line chart
+   ============================ */
+
+function selectExercise(name){
+  selectedExercise = name;
+  chartInfo.textContent = `Exercício: ${name}`;
+  drawChart();
+}
+
+function drawChart(){
+  const ctx = chartCanvas.getContext('2d');
+  const w = chartCanvas.width = chartCanvas.clientWidth;
+  const h = chartCanvas.height = chartCanvas.clientHeight;
+  // clear
+  ctx.clearRect(0,0,w,h);
+  // background
+  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--card').trim() || '#fff';
+  ctx.fillRect(0,0,w,h);
+
+  if(!selectedExercise){
+    ctx.fillStyle = 'var(--muted)';
+    ctx.font = '14px system-ui';
+    ctx.fillText('Nenhum exercício selecionado', 12, 24);
+    return;
+  }
+  const data = (state.history[selectedExercise] || []).slice(-30); // last 30
+  if(data.length === 0){
+    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--muted').trim() || '#666';
+    ctx.font = '13px system-ui';
+    ctx.fillText('Sem histórico. Use "Salvar sessão" para gerar histórico.', 12, 24);
+    return;
+  }
+
+  // parse points (use only entries with carga number)
+  const points = data.map(d => ({ date: d.date, carga: (typeof d.carga === 'number' ? d.carga : null)}));
+  const numericPoints = points.filter(p => typeof p.carga === 'number');
+
+  // axis
+  const padding = 36;
+  const left = padding, right = w - padding, top = 18, bottom = h - padding;
+  // find min/max
+  let min = Math.min(...numericPoints.map(p => p.carga));
+  let max = Math.max(...numericPoints.map(p => p.carga));
+  if(!isFinite(min) || !isFinite(max)){
+    // if no numeric values, just draw labels
+    ctx.fillStyle = 'var(--muted)';
+    ctx.fillText('Sem cargas numéricas registradas.', left, top + 12);
+    return;
+  }
+  if(min === max){
+    min = Math.max(0, min - 2);
+    max = max + 2;
+  }
+  const range = max - min;
+
+  // draw grid lines and y labels
+  ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+  ctx.lineWidth = 1;
+  ctx.font = '12px system-ui';
+  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--muted').trim();
+  const steps = 4;
+  for(let i=0;i<=steps;i++){
+    const y = top + ( (bottom-top) * i / steps );
+    ctx.beginPath();
+    ctx.moveTo(left, y);
+    ctx.lineTo(right, y);
+    ctx.stroke();
+    const val = (max - (range * i/steps));
+    ctx.fillText(val.toFixed(1), 6, y+4);
+  }
+  // draw x labels
+  const total = points.length;
+  const xs = [];
+  for(let i=0;i<total;i++){
+    const x = left + ((right-left) * i / Math.max(1,total-1));
+    xs.push({x, date: points[i].date});
+  }
+  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--muted').trim();
+  ctx.textAlign = 'center';
+  ctx.font = '11px system-ui';
+  for(let i=0;i<xs.length;i+=Math.ceil(total/6)){
+    ctx.fillText(xs[i].date, xs[i].x, bottom + 14);
+  }
+  ctx.textAlign = 'start';
+
+  // draw line
+  ctx.beginPath();
+  ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#4f46e5';
+  ctx.lineWidth = 2.4;
+  let moved=false;
+  for(let i=0;i<points.length;i++){
+    const p = points[i];
+    if(typeof p.carga !== 'number'){
+      moved=false; continue;
+    }
+    const x = left + ((right-left) * i / Math.max(1,total-1));
+    const y = top + ((max - p.carga)/range) * (bottom-top);
+    if(!moved){ ctx.moveTo(x,y); moved=true; } else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+
+  // draw dots & tooltip data area
+  ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#4f46e5';
+  for(let i=0;i<points.length;i++){
+    const p = points[i];
+    if(typeof p.carga !== 'number') continue;
+    const x = left + ((right-left) * i / Math.max(1,total-1));
+    const y = top + ((max - p.carga)/range) * (bottom-top);
+    ctx.beginPath();
+    ctx.arc(x,y,4,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  // interactive tooltip (mouse move)
+  chartCanvas.onmousemove = function(ev){
+    const rect = chartCanvas.getBoundingClientRect();
+    const mx = ev.clientX - rect.left;
+    const my = ev.clientY - rect.top;
+    // find nearest point
+    let nearest = null, nd = 9e9;
+    for(let i=0;i<points.length;i++){
+      const p = points[i];
+      if(typeof p.carga !== 'number') continue;
+      const x = left + ((right-left) * i / Math.max(1,total-1));
+      const y = top + ((max - p.carga)/range) * (bottom-top);
+      const d = Math.hypot(mx-x,my-y);
+      if(d < nd){ nd=d; nearest={i, x, y, p}; }
+    }
+    // redraw to show highlight
+    ctx.clearRect(0,0,w,h);
+    // background & grid (simple re-draw)
+    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--card').trim() || '#fff';
+    ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+    for(let i=0;i<=steps;i++){
+      const y = top + ( (bottom-top) * i / steps );
+      ctx.beginPath(); ctx.moveTo(left,y); ctx.lineTo(right,y); ctx.stroke();
+    }
+    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--muted').trim();
+    ctx.font = '12px system-ui';
+    for(let i=0;i<=steps;i++){
+      const y = top + ( (bottom-top) * i / steps );
+      const val = (max - (range * i/steps));
+      ctx.fillText(val.toFixed(1), 6, y+4);
+    }
+    ctx.textAlign = 'center'; ctx.font = '11px system-ui';
+    for(let i=0;i<xs.length;i+=Math.ceil(total/6)){
+      ctx.fillText(xs[i].date, xs[i].x, bottom + 14);
+    }
+    ctx.textAlign = 'start';
+
+    // line
+    ctx.beginPath();
+    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#4f46e5';
+    ctx.lineWidth = 2.4;
+    moved=false;
+    for(let i=0;i<points.length;i++){
+      const p = points[i];
+      if(typeof p.carga !== 'number'){ moved=false; continue;}
+      const x = left + ((right-left) * i / Math.max(1,total-1));
+      const y = top + ((max - p.carga)/range) * (bottom-top);
+      if(!moved){ ctx.moveTo(x,y); moved=true; } else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+
+    // dots
+    for(let i=0;i<points.length;i++){
+      const p = points[i];
+      if(typeof p.carga !== 'number') continue;
+      const x = left + ((right-left) * i / Math.max(1,total-1));
+      const y = top + ((max - p.carga)/range) * (bottom-top);
+      ctx.beginPath();
+      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#4f46e5';
+      ctx.arc(x,y,4,0,Math.PI*2);
+      ctx.fill();
+    }
+
+    // tooltip
+    if(nearest && nd < 28){
+      const {x,y,p} = nearest;
+      // draw halo
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(0,0,0,0.06)';
+      ctx.arc(x,y,8,0,Math.PI*2);
+      ctx.fill();
+      // box
+      const txt = `${p.date} — ${p.carga} kg`;
+      const tw = ctx.measureText(txt).width + 18;
+      const bx = Math.min(w - tw - 8, Math.max(8, x + 8));
+      const by = Math.max(8, y - 28);
+      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--card').trim();
+      ctx.fillRect(bx, by, tw, 28);
+      ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+      ctx.strokeRect(bx, by, tw, 28);
+      ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text').trim();
+      ctx.font = '12px system-ui';
+      ctx.fillText(txt, bx + 8, by + 18);
+    }
+  }; // mousemove
+  chartCanvas.onmouseleave = () => { chartCanvas.onmousemove = null; drawChart(); };
+}
+
+/* ============================
+   Initialize
+   ============================ */
+
+render();
+drawChart();
+
+/* redraw on resize for proper canvas size */
+window.addEventListener('resize', () => drawChart());
+
+<!-- Service Worker registration for PWA -->
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => console.log('Service Worker registrado', reg))
+      .catch(err => console.log('Falha ao registrar SW:', err));
+  });
+}
+
+</script>
+
+</body>
+</html>
